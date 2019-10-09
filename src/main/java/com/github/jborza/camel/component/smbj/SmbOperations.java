@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.util.List;
+import java.util.regex.Matcher;
 
 public class SmbOperations implements GenericFileOperations<SmbFile>, SmbShareFactory {
 
@@ -57,7 +58,7 @@ public class SmbOperations implements GenericFileOperations<SmbFile>, SmbShareFa
         try {
             smbClient.deleteFile(name);
             return true;
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new GenericFileOperationFailedException("Cannot delete file: " + name, e);
         }
     }
@@ -83,7 +84,8 @@ public class SmbOperations implements GenericFileOperations<SmbFile>, SmbShareFa
     @Override
     public boolean renameFile(String from, String to) throws GenericFileOperationFailedException {
         try {
-            smbClient.renameFile(from, to);
+            // In some scenarios the to path is set with a double file separator, this needs to be removed.
+            smbClient.renameFile(from, to.replaceAll("(?<!^)(\\\\|/){2,}", Matcher.quoteReplacement(File.separator)));
             return true;
         } catch (IOException e) {
             throw new GenericFileOperationFailedException("Cannot rename file: " + from + " to:" + to, e);
@@ -143,8 +145,6 @@ public class SmbOperations implements GenericFileOperations<SmbFile>, SmbShareFa
             // store the File reference as the message body
             file.setBody(local);
             smbClient.retrieveFile(name, os);
-        } catch (IOException e) {
-            throw new GenericFileOperationFailedException("Cannot retrieve file: " + name, e);
         } catch (Exception e) {
             throw new GenericFileOperationFailedException("Cannot retrieve file: " + name, e);
         } finally {
@@ -184,13 +184,21 @@ public class SmbOperations implements GenericFileOperations<SmbFile>, SmbShareFa
 
     @SuppressWarnings("unchecked")
     private boolean retrieveFileToStreamInBody(String name, Exchange exchange) throws GenericFileOperationFailedException {
-        OutputStream os = new ByteArrayOutputStream();
+        // update for stream support
         GenericFile<SmbFile> target = (GenericFile<SmbFile>) exchange.getProperty(FileComponent.FILE_EXCHANGE_FILE);
         ObjectHelper.notNull(target, "Exchange should have the " + FileComponent.FILE_EXCHANGE_FILE + " set");
-        target.setBody(os);
+
         try {
-            smbClient.retrieveFile(name, os);
-            return true;
+            SmbConfiguration configuration = (SmbConfiguration) endpoint.getConfiguration();
+            if (configuration.isStreamDownload()) {
+                target.setBody(smbClient.retrieveFileAsStream(name, exchange));
+                return true;
+            } else {
+                OutputStream os = new ByteArrayOutputStream();
+                target.setBody(os);
+                smbClient.retrieveFile(name, os);
+                return true;
+            }
         } catch (IOException e) {
             throw new GenericFileOperationFailedException("Cannot retrieve file: " + name, e);
         }

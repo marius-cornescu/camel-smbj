@@ -16,6 +16,8 @@
 
 package com.github.jborza.camel.component.smbj;
 
+import org.apache.camel.Exchange;
+import org.apache.camel.spi.Synchronization;
 import org.apache.camel.util.IOHelper;
 
 import java.io.IOException;
@@ -60,6 +62,24 @@ public class SmbClient {
         }
     }
 
+    /**
+     * The inputstream is directly returned in order to stream the body directly from the file system
+     * When the file is moved and thus the exchange is completed the stream and thus the share needs to
+     * closed. By adding the onCompletion
+     * @param name
+     * @param exchange
+     * @return
+     * @throws IOException
+     */
+    public InputStream retrieveFileAsStream(String name, Exchange exchange) throws IOException {
+
+        SmbShare share = makeSmbShare();
+        exchange.addOnCompletion(smbSynchronization(share));
+
+        return share.retrieveFileStream(name);
+
+    }
+
     public boolean fileExists(String name) throws IOException {
         try (SmbShare share = makeSmbShare()) {
             return share.fileExists(name);
@@ -82,5 +102,27 @@ public class SmbClient {
         try (SmbShare share = makeSmbShare()) {
             return share.mkdirs(directory);
         }
+    }
+
+    private Synchronization smbSynchronization(SmbShare share) {
+        return new Synchronization() {
+            @Override
+            public void onComplete(Exchange exchange) {
+                closeShare();
+            }
+
+            @Override
+            public void onFailure(Exchange exchange) {
+                closeShare();
+            }
+
+            private void closeShare() {
+                try {
+                    share.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        };
     }
 }

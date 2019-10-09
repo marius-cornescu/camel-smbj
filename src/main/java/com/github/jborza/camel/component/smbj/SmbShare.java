@@ -38,16 +38,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 
 import static com.github.jborza.camel.component.smbj.SmbConstants.CURRENT_DIRECTORY;
 import static com.github.jborza.camel.component.smbj.SmbConstants.PARENT_DIRECTORY;
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
 
 public class SmbShare implements AutoCloseable {
-    private final SMBClient client;
+    private final ConnectionCache connectionCache;
     private final SmbConfiguration config;
     private final boolean dfs;
     private final int bufferSize;
@@ -55,14 +56,16 @@ public class SmbShare implements AutoCloseable {
     private Session session;
     private String path;
     private DiskShare share;
-    private ConnectionCache connectionCache;
 
     public SmbShare(SMBClient client, SmbConfiguration config, boolean dfs, int bufferSize) {
-        this.client = client;
+        this(new ConnectionCache(client), config, dfs, bufferSize);
+    }
+
+    SmbShare(ConnectionCache connectionCache, SmbConfiguration config, boolean dfs, int bufferSize) {
         this.config = config;
         this.dfs = dfs;
         this.bufferSize = bufferSize;
-        connectionCache = new ConnectionCache(client);
+        this.connectionCache = connectionCache;
     }
 
     private void connect(String targetPath) {
@@ -117,10 +120,7 @@ public class SmbShare implements AutoCloseable {
     }
 
     private Session connectSession() {
-        if (config.isDefaultPort())
-            return connectSession(config.getHost());
-        else
-            return connectSession(config.getHost(), config.getPort());
+        return connectSession(config.getHost(), config.getPort());
     }
 
     private Session connectSession(String host, int port) {
@@ -157,14 +157,14 @@ public class SmbShare implements AutoCloseable {
 
     private DfsResolutionResult connectDfsShare(Session session, SmbPath path) {
         DfsResolver resolver = new DfsResolver();
-        SmbPath resolvedPath = resolver.resolve(client, session, path);
-        DiskShare share = getDfsShare(session, resolvedPath);
-        return new DfsResolutionResult(share, resolvedPath);
+        SmbPath resolvedPath = resolver.resolve(connectionCache.getClient(), session, path);
+        DiskShare diskShare = getDfsShare(session, resolvedPath);
+        return new DfsResolutionResult(diskShare, resolvedPath);
     }
 
     private DfsResolutionResult connectNonDfsShare(Session session, SmbPath path) {
-        DiskShare share = (DiskShare) session.connectShare(path.getShareName());
-        return new DfsResolutionResult(share, path);
+        DiskShare diskShare = (DiskShare) session.connectShare(path.getShareName());
+        return new DfsResolutionResult(diskShare, path);
     }
 
     private DiskShare getDfsShare(Session session, SmbPath resolvedPath) {
@@ -191,9 +191,9 @@ public class SmbShare implements AutoCloseable {
         if (!resolvedFrom.getSmbPath().isOnSameShare(resolvedTo.getSmbPath())) {
             throw new AttemptedRenameAcrossSharesException("Rename operation failed, " + from + " and " + to + " are on different shares!");
         }
-        DiskShare share = resolvedFrom.getDiskShare();
+        DiskShare diskShare = resolvedFrom.getDiskShare();
         EnumSet<AccessMask> renameAttributes = EnumSet.of(AccessMask.FILE_READ_ATTRIBUTES, AccessMask.DELETE, AccessMask.SYNCHRONIZE);
-        try (File file = share.openFile(resolvedFrom.getSmbPath().getPath(), renameAttributes, null, SMB2ShareAccess.ALL, SMB2CreateDisposition.FILE_OPEN, null)) {
+        try (File file = diskShare.openFile(resolvedFrom.getSmbPath().getPath(), renameAttributes, null, SMB2ShareAccess.ALL, SMB2CreateDisposition.FILE_OPEN, null)) {
             file.rename(resolvedTo.getSmbPath().getPath());
         }
     }
@@ -246,6 +246,13 @@ public class SmbShare implements AutoCloseable {
         IOHelper.copyAndCloseInput(is, os, bufferSize);
     }
 
+    public InputStream retrieveFileStream(String path) {
+        connect(path);
+        File f = openForRead(getShare(), getPath());
+        return f.getInputStream();
+    }
+
+
     public boolean fileExists(String path) {
         connect(path);
         return getShare().fileExists(getPath());
@@ -260,17 +267,27 @@ public class SmbShare implements AutoCloseable {
 
     public boolean mkdirs(String directory) {
         connect(directory);
-        Path path = Paths.get(getPath());
+        Path path = SmbPathUtils.get(getPath(), config.getPathSeparator());
         mkdirs(path);
         return true;
     }
 
     private void mkdirs(Path path) {
+        if (isNull(path)) {
+            return;
+        }
+
         Path parent = path.getParent();
-        if (parent != null && !getShare().folderExists(parent.toString()))
-            mkdirs(path.getParent());
-        if (!getShare().folderExists(path.toString()))
-            getShare().mkdir(path.toString());
+        String parentStringPath = SmbPathUtils.toString(parent, config.getPathSeparator());
+
+        if (nonNull(parent) && !getShare().folderExists(parentStringPath)) {
+            mkdirs(parent);
+        }
+
+        String stringPath = SmbPathUtils.toString(path, config.getPathSeparator());
+        if (!getShare().folderExists(stringPath)) {
+            getShare().mkdir(stringPath);
+        }
     }
 
     private static File openForWrite(DiskShare share, String name) {

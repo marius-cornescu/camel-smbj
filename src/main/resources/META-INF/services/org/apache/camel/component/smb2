@@ -16,3 +16,4 @@
 #
 
 class=com.github.jborza.camel.component.smbj.SmbComponent
+strategy.factory.class=com.github.jborza.camel.component.smbj.strategy.SmbProcessStrategyFactory

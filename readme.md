@@ -20,3 +20,11 @@ This component uses the [SMBJ library](https://github.com/hierynomus/smbj) for t
 
 By itself, the camel-smbj component is an extension of the [File component](http://camel.apache.org/file2.html).
 
+## Extra Uri parameters
+
+* **streamDownload**: (default: false) for consumer only: use stream download for files, instead of in-memory
+* **pathSeparator**: (default: \\): file separator to use when interacting with the target (remote) samba server.
+
+## Strategy classes
+The classes are based on the Sftp classes in the 2.17.0 camel-sftp open source version. They basically add the
+ **readLock** functionality to the camel component.

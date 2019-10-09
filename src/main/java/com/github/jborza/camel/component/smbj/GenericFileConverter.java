@@ -17,9 +17,11 @@
 package com.github.jborza.camel.component.smbj;
 
 import org.apache.camel.component.file.GenericFile;
+import org.apache.camel.util.FileUtil;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public class GenericFileConverter {
     public GenericFile<SmbFile> asGenericFile(String path, SmbFile info, String endpointPath, String currentRelativePath) {
@@ -32,18 +34,26 @@ public class GenericFileConverter {
         f.setFile(info);
         f.setLastModified(info.getLastModified());
         f.setFileName(currentRelativePath + info.getFileName());
-        f.setRelativeFilePath(info.getFileName());
+        String endpointNormalized = FileUtil.normalizePath(endpointPath);
+        String normalizePath = FileUtil.normalizePath(path);
+        if (!endpointPath.isEmpty() && normalizePath.startsWith(endpointNormalized) && !endpointNormalized.equals(normalizePath)){
+            String relativePath = normalizePath.replaceFirst(Pattern.quote(endpointNormalized) + "[\\\\/]" , "");
+            f.setRelativeFilePath(relativePath + f.getFileSeparator() + info.getFileName());
+        } else {
+            f.setRelativeFilePath(info.getFileName());
+        }
+
         f.setDirectory(info.isDirectory());
         f.setExtendedAttributes(getExtendedAttributes(info));
         return f;
     }
 
-    private Map<String,Object> getExtendedAttributes(SmbFile info){
-        Map<String,Object> attrs = new HashMap<>();
-        attrs.put(FileDirectoryAttributes.DOS_ARCHIVE,info.isArchive());
-        attrs.put(FileDirectoryAttributes.DOS_HIDDEN,info.isHidden());
-        attrs.put(FileDirectoryAttributes.DOS_READONLY,info.isReadOnly());
-        attrs.put(FileDirectoryAttributes.DOS_SYSTEM,info.isSystem());
+    private Map<String, Object> getExtendedAttributes(SmbFile info) {
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put(FileDirectoryAttributes.DOS_ARCHIVE, info.isArchive());
+        attrs.put(FileDirectoryAttributes.DOS_HIDDEN, info.isHidden());
+        attrs.put(FileDirectoryAttributes.DOS_READONLY, info.isReadOnly());
+        attrs.put(FileDirectoryAttributes.DOS_SYSTEM, info.isSystem());
         return attrs;
     }
 }

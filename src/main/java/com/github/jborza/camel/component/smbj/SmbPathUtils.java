@@ -17,7 +17,12 @@
 package com.github.jborza.camel.component.smbj;
 
 import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Objects;
 import java.util.regex.Pattern;
+
+import static com.github.jborza.camel.component.smbj.SmbConstants.UNIX_PATH_SEPARATOR;
 
 public final class SmbPathUtils {
 
@@ -33,7 +38,42 @@ public final class SmbPathUtils {
     private static String removeShareName(String path, String shareName, String separator) {
         if (path.equals(shareName))
             return "";
-        String sharePathElementPattern = "^" + Pattern.quote(shareName + separator);
+        String sharePathElementPattern = "^" + Pattern.quote(shareName) + Pattern.quote(separator);
         return path.replaceFirst(sharePathElementPattern, "");
     }
+
+    /**
+     * added to make the Path component OS specific
+     */
+    public static Path get(String path, char pathSeparator) {
+        if (Objects.isNull(path)) {
+            return null;
+        }
+
+        if (UNIX_PATH_SEPARATOR != pathSeparator) {
+            // java Path will treat unix separator as path separator on windows and unix ...
+            // but the windows path separator is treated as part of the dir name on unix ... so a dir can be named "a\b\c"
+            path = path.replace(pathSeparator, UNIX_PATH_SEPARATOR);
+        }
+
+        return Paths.get(path);
+    }
+
+    /**
+     * added to make the Path component OS specific
+     */
+    public static String toString(Path path, char pathSeparator) {
+        if (Objects.isNull(path)) {
+            return null;
+        }
+
+        String pathString = path.toString();
+
+        if (UNIX_PATH_SEPARATOR != pathSeparator) {
+            pathString = pathString.replace(UNIX_PATH_SEPARATOR, pathSeparator);
+        }
+
+        return pathString;
+    }
+
 }

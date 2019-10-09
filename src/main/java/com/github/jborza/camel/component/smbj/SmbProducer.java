@@ -46,8 +46,10 @@ public class SmbProducer extends GenericFileProducer<SmbFile> {
             log.debug("About to write [" + fileName + "] to [" + getEndpoint() + "] from exchange [" + exchange + "]");
         }
         final int SIZE_UNKNOWN = 0;
-        operations.storeFile(fileNameWithoutShare, exchange, SIZE_UNKNOWN);
-
+        boolean success = operations.storeFile(fileNameWithoutShare, exchange, SIZE_UNKNOWN);
+        if (!success) {
+            throw new GenericFileOperationFailedException("Error writing file [" + fileName + "]");
+        }
         if (log.isDebugEnabled()) {
             log.debug("Wrote [" + fileName + "] to [" + getEndpoint() + "]");
         }

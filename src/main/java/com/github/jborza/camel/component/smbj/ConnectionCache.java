@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ConnectionCache {
+
     private final SMBClient client;
     private Map<String, Connection> connections;
 
@@ -49,5 +50,9 @@ public class ConnectionCache {
             connections.put(key, cachedConnection);
         }
         return cachedConnection;
+    }
+
+    SMBClient getClient() {
+        return client;
     }
 }

@@ -53,7 +53,7 @@ public class SmbConsumer extends GenericFileConsumer<SmbFile> {
             }
             GenericFile<SmbFile> gf = genericFileConverter.asGenericFile(fileName, smbFile, endpointPath, currentRelativePath);
             if (gf.isDirectory()) {
-                if (endpoint.isRecursive() && currentDepth < endpoint.getMaxDepth()) {
+                if (endpoint.isRecursive() && currentDepth < endpoint.getMaxDepth()  && isValidFile(gf, true, smbFiles)) {
                     //recursive scan of the subdirectory
                     String subDirName = fileName + "/" + gf.getFileName();
                     pollDirectory(subDirName, fileList, currentDepth);

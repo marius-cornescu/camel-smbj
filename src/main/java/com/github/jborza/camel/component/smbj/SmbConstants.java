@@ -25,4 +25,7 @@ public final class SmbConstants {
     public final static long FILE_ATTRIBUTE_SYSTEM = 0x4L;
     public final static String PARENT_DIRECTORY = "..";
     public final static String CURRENT_DIRECTORY = ".";
+
+    public static final char WINDOWS_PATH_SEPARATOR = '\\';
+    public static final char UNIX_PATH_SEPARATOR = '/';
 }
